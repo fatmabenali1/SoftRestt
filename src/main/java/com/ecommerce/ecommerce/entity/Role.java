@@ -1,5 +1,8 @@
 package com.ecommerce.ecommerce.entity;
 
+import lombok.Getter;
+
+@Getter
 public enum Role {
-    Admin,Client
+    COLLABORATEUR,RH,TECHLEAD;
 }

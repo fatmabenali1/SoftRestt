@@ -4,6 +4,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.List;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -16,11 +18,13 @@ public class Token {
     private String jwt;
     private boolean expire;
     private boolean desactive;
-
+    private boolean loggedOut;
     @DBRef
     private Utilisateur utilisateur;  // DBRef creates a reference to another document
 
     public Token(String token) {
         this.jwt = token;
     }
+    @DBRef
+    private List<Token> tokens;
 }

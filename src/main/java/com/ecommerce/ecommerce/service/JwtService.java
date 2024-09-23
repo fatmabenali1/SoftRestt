@@ -9,6 +9,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -20,22 +21,23 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class JwtService {
-private final UtilisateurRepository utilisateurRepository;
-private final UserService userService;
-private final TokenRepository tokenRepository;
+    private final UtilisateurRepository utilisateurRepository;
+    private final UserService userService;
+    private final TokenRepository tokenRepository;
+    private final BlacklistTokenService blacklistTokenService;
     public String genererToken(String username){
-      Utilisateur utilisateur = userService.loadUserByUsername(username);
+        Utilisateur utilisateur = userService.loadUserByUsername(username);
         final Token token = Token.builder().utilisateur(utilisateur).expire(false).desactive(false).jwt(generateJwt(utilisateur)).build();
-    //    tokenRepository.save(token);
+        //    tokenRepository.save(token);
         return generateJwt(utilisateur);
     }
 
     private String generateJwt(UserDetails utilisateur) {
-       return Jwts.builder().setIssuedAt(new Date(System.currentTimeMillis())).
-               setExpiration(new Date(System.currentTimeMillis()+1000*60*30)).
+        return Jwts.builder().setIssuedAt(new Date(System.currentTimeMillis())).
+                setExpiration(new Date(System.currentTimeMillis()+1000*60*30)).
                 setSubject(utilisateur.getUsername()).
                 signWith(generateKey(), SignatureAlgorithm.HS256).compact();
-       //return Map.of("bearer",bearer);
+        //return Map.of("bearer",bearer);
     }
 
     private Key generateKey() {
@@ -44,7 +46,7 @@ private final TokenRepository tokenRepository;
     }
     public <T> T extactClaim(String token, Function<Claims,T>claimsResolver){
         final Claims claims = extracAllClaims(token);
-         return claimsResolver.apply(claims);
+        return claimsResolver.apply(claims);
     }
     private Claims extracAllClaims(String token){
         return Jwts.parserBuilder().
@@ -59,11 +61,28 @@ private final TokenRepository tokenRepository;
         return extactClaim(token,Claims::getExpiration);
     }
     public boolean isTokenExpired(String token){
-       return expiration(token).before(new Date());
+        return expiration(token).before(new Date());
     }
 
     public boolean validationToken(String token, UserDetails userDetails){
         final String username = getUsername(token);
         return ((userDetails.getUsername()).equals(username)&& !isTokenExpired(token));
     }
+    public String extractTokenFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            // Supprime le préfixe "Bearer " pour ne garder que le token
+            return bearerToken.substring(7);
+        }
+        return null; // Retourne null si aucun token valide n'est trouvé
+    }
+    public boolean validateToken(String token) {
+        if (blacklistTokenService.isBlacklisted(token)) {
+            return false; // Le token est dans la liste noire
+        }
+        // Autres vérifications de validité du token
+        return !isTokenExpired(token);
+    }
+
+
 }

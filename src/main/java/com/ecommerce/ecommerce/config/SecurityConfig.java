@@ -1,8 +1,15 @@
 package com.ecommerce.ecommerce.config;
+
+import jakarta.servlet.http.HttpServletRequest;
+import com.ecommerce.ecommerce.service.BlacklistTokenService;
 import com.ecommerce.ecommerce.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import jakarta.servlet.ServletException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -10,61 +17,83 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
+import org.springframework.security.web.header.HeaderWriterFilter;
+import org.springframework.security.web.session.DisableEncodeUrlFilter;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 @EnableMethodSecurity
 public class SecurityConfig {
+
     private final JwtConfig jwtConfig;
-    private final PasswordEncoderCrypted passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final BlacklistTokenService blacklistTokenService;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return   http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(
-                        authorize ->
-                                authorize
-                                        .requestMatchers("/**","/error").permitAll()  // Permet l'accès à tous les endpoints sous /api/auth
-                                        .requestMatchers("/api/conges/all").authenticated()  // Authentification requise pour ce chemin
-                                        .requestMatchers("/api/conges/demander").authenticated()  // Authentification requise pour ce chemin
-                                        .requestMatchers("/api/conges/valider-techlead/**").hasRole("TECHLEAD")  // Rôle TECHLEAD requis
-                                        .requestMatchers("/api/conges/valider-rh/**").hasRole("RH")
-                                        .anyRequest().authenticated()
-                ).sessionManagement(httpSecuritySessionManagementConfigurer ->
+        return http
+                .csrf(csrf -> csrf.disable()) // Disable CSRF for API
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/inscription", "/connexion").permitAll() // Allow these without auth
+                        .requestMatchers(HttpMethod.GET,"/conges/").authenticated()
+                        .requestMatchers("/error").permitAll()
+                        .anyRequest().permitAll() // Require authentication for all other requests
+                )
+                .sessionManagement(httpSecuritySessionManagementConfigurer ->
                         httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .addFilterBefore(jwtConfig, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtConfig, AnonymousAuthenticationFilter.class) // Add JwtConfig filter before AnonymousAuthenticationFilter
+                .logout(logout -> logout
+                        .logoutUrl("/logout") // Set the logout URL
+                        .invalidateHttpSession(true) // Invalidate the session
+                        .clearAuthentication(true) // Clear authentication
+                        .deleteCookies("JSESSIONID") // Optional: delete session cookies
+                        .addLogoutHandler(new LogoutHandler() {
+                            @Override
+                            public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+                                String authorizationHeader = request.getHeader("Authorization");
+                                if (authorizationHeader != null && authorizationHeader.length() > 7) {
+                                    String token = authorizationHeader.substring(7);
+                                    blacklistTokenService.blacklistToken(token); // Blacklist the token after logout
+                                }
+                            }
+                        })
+                        .logoutSuccessHandler(new LogoutSuccessHandler() {
+                            @Override
+                            public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+                                response.setStatus(HttpServletResponse.SC_OK);
+                                response.getWriter().write("Déconnexion réussie");
+                            }
+                        })
+                )
                 .build();
     }
 
-   /*@Bean
-    SecurityWebFilterChain http(ServerHttpSecurity https) throws Exception {
-        DelegatingServerLogoutHandler logoutHandler = new DelegatingServerLogoutHandler(
-                new WebSessionServerLogoutHandler(), new SecurityContextServerLogoutHandler()
-        );
-
-        https
-                .authorizeExchange((exchange) -> exchange.anyExchange().authenticated())
-                .logout((logout) -> logout.logoutHandler(logoutHandler));
-                 return https.build();
-    }*/
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
+
     @Bean
-    public AuthenticationProvider authenticationProvider(UserService userService){
+    public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider daoAuthenticationProvider = new DaoAuthenticationProvider();
         daoAuthenticationProvider.setUserDetailsService(userService);
-        daoAuthenticationProvider.setPasswordEncoder(passwordEncoder.passwordEncoder());
+        daoAuthenticationProvider.setPasswordEncoder(passwordEncoder);
         return daoAuthenticationProvider;
-
     }
-
-
-
 }

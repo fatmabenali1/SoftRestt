@@ -20,12 +20,13 @@ public class Conge {
     private Date dateFin;
     private String reason;
     private String status = "Pending";
-    private int soldeConges;
     private Date dateValidation;
     private String title;
+    private String nom;
+   private int countVacation = 30;
+
     @DBRef
     private Utilisateur utilisateur;
 
-    // Add a getter for the utilisateur's role, with a null check
 
 }

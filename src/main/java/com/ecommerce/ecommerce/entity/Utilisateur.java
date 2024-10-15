@@ -25,12 +25,14 @@ public class Utilisateur implements UserDetails {
     @Id
     private String idU;
     private String username;
+    private String nom;
     private String email;
     private String password;  // Ajout du mot de passe
-    private Role role;  // "COLLABORATEUR", "TECHLEAD", "RH"
+    private Role role;
+    private int soldeConges = 30;
+    private int countVacation = 30;
     @DBRef
     private List<Conge> conges;
-
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -57,6 +59,7 @@ public class Utilisateur implements UserDetails {
     public boolean isCredentialsNonExpired() {
         return true;
     }
+
 
     @Override
     public boolean isEnabled() {

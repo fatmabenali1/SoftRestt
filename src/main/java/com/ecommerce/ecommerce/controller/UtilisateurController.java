@@ -20,6 +20,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @Slf4j
@@ -71,31 +73,26 @@ public class UtilisateurController {
     @PostMapping("connexion")
     public ResponseEntity<TokenAuth> login(@RequestBody DtoUtilisateur utilisateur) {
         try {
-            // Authentifier l'utilisateur
             Authentication auth = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(utilisateur.getUsername(), utilisateur.getPassword()));
 
             if (auth.isAuthenticated()) {
-                // Générer le token JWT
                 String token = jwtService.genererToken(utilisateur.getUsername());
 
-                // Récupérer les détails de l'utilisateur authentifié
                 UserDetails userDetails = (UserDetails) auth.getPrincipal();
                 String username = userDetails.getUsername();
 
-                // Récupérer l'utilisateur depuis la base de données
                 Utilisateur userFromDb = userService.loadUserByUsername(username);
                 if (userFromDb == null) {
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
                 }
-
-                // Récupérer les informations de l'utilisateur
                 String email = userFromDb.getEmail();
                 String idU = userFromDb.getIdU(); // Assurez-vous que l'ID est bien stocké en tant que chaîne ou Long
-                Role role = userFromDb.getRole(); // Récupérer le rôle de l'utilisateur
-
+                Role role = userFromDb.getRole();
+                String nom = userFromDb.getNom();
+                int soldeConges = userFromDb.getSoldeConges();
                 // Créer une réponse avec le token, le nom d'utilisateur, l'email, l'ID utilisateur et le rôle
-                TokenAuth response = new TokenAuth(token, username, email, role, idU);
+                TokenAuth response = new TokenAuth(token, username, email, role, nom, soldeConges,idU);
 
                 return ResponseEntity.ok(response);
             }
@@ -105,6 +102,9 @@ public class UtilisateurController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
     }
-
-}
-
+    @GetMapping("/role/{roleName}")
+    public List<Utilisateur> getUtilisateursByRole(@PathVariable String roleName) {
+        Role role = Role.valueOf(roleName.toUpperCase());
+        return userService.getUtilisateursByRole(role);
+    }
+    }

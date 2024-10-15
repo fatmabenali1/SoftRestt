@@ -14,6 +14,9 @@ public class TokenAuth {
     private String username;
     private String email;
     private Role role ;
+    private String nom;
+    private int soldeConges = 30;
+
     @Id
     private String idU;
 }

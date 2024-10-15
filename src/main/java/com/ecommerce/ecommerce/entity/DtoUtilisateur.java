@@ -13,7 +13,10 @@ public class DtoUtilisateur {
     private String password;
     private String email;
     private  Role role ;
+    private String nom;
     @Id
     private String idU;
+    private Conge conge;
+    private int soldeConges = 30;
 
 }
